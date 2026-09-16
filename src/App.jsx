@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { searchAudiusTracks } from "./audiusApi";
+import {
+  saveLocalSongs,
+  getLocalSongs,
+} from "./localMusicDB";
 const SONGS = [
   {
     id: 1,
@@ -112,12 +116,83 @@ const playAudiusSong = (track) => {
 
   addToRecent(audiusSong);
 };
-const handleLocalMusic = (event) => {
-  const files = Array.from(event.target.files);
+const handleLocalMusic = async (event) => {
+  const files = Array.from(event.target.files || []);
 
-  const audioFiles = files.filter((file) =>
-    file.type.startsWith("audio/")
-  );
+  const supportedExtensions = [
+    ".mp3",
+    ".wav",
+    ".m4a",
+    ".aac",
+    ".ogg",
+    ".flac",
+    ".webm",
+  ];
+
+  const audioFiles = files.filter((file) => {
+    const name = file.name.toLowerCase();
+
+    return (
+      file.type.startsWith("audio/") ||
+      supportedExtensions.some((extension) =>
+        name.endsWith(extension)
+      )
+    );
+  });
+
+  const newLocalSongs = audioFiles.map((file, index) => ({
+    id: `local-${file.name}-${file.size}-${file.lastModified}`,
+    title: file.name.replace(/\.[^/.]+$/, ""),
+    artist: "Local Music",
+    cover: "🎵",
+    url: URL.createObjectURL(file),
+    file: file,
+    isLocal: true,
+    fileName: file.name,
+  }));
+
+  try {
+    await saveLocalSongs(newLocalSongs);
+
+    setLocalSongs((prev) => {
+      const existingIds = new Set(prev.map((song) => song.id));
+
+      const uniqueSongs = newLocalSongs.filter(
+        (song) => !existingIds.has(song.id)
+      );
+
+      return [...prev, ...uniqueSongs];
+    });
+
+    setSongs((prev) => {
+      const onlineSongs = prev.filter((song) => !song.isLocal);
+
+      const existingLocalSongs = prev.filter(
+        (song) => song.isLocal
+      );
+
+      const existingIds = new Set(
+        existingLocalSongs.map((song) => song.id)
+      );
+
+      const uniqueSongs = newLocalSongs.filter(
+        (song) => !existingIds.has(song.id)
+      );
+
+      return [
+        ...onlineSongs,
+        ...existingLocalSongs,
+        ...uniqueSongs,
+      ];
+    });
+
+    console.log(`${newLocalSongs.length} songs saved`);
+  } catch (error) {
+    console.error("Failed to save local music:", error);
+  }
+
+  event.target.value = "";
+};
 
   const newLocalSongs = audioFiles.map((file, index) => ({
     id: `local-${Date.now()}-${index}`,
@@ -166,7 +241,32 @@ const repeatRef = useRef(false);
 useEffect(() => {
   shuffleRef.current = shuffle;
 }, [shuffle]);
+useEffect(() => {
+  const loadLocalMusic = async () => {
+    try {
+      const savedSongs = await getLocalSongs();
 
+      if (savedSongs.length > 0) {
+        const songsWithUrls = savedSongs.map((song) => ({
+          ...song,
+          url: URL.createObjectURL(song.file),
+        }));
+
+        setLocalSongs(songsWithUrls);
+
+        setSongs((prev) => {
+          const onlineSongs = prev.filter((song) => !song.isLocal);
+
+          return [...onlineSongs, ...songsWithUrls];
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load local music:", error);
+    }
+  };
+
+  loadLocalMusic();
+}, []);
 useEffect(() => {
   repeatRef.current = repeat;
 }, [repeat]);
