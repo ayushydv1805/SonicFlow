@@ -41,7 +41,7 @@ const readStoredArray = (key) => {
     const parsed = saved ? JSON.parse(saved) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    console.warn(\`Failed to read \${key}:\`, error);
+    console.warn(`Failed to read ${key}:`, error);
     return [];
   }
 };
@@ -951,7 +951,7 @@ useEffect(() => {
 
                 return (
                   <div
-                    className={\`song-card \${song.id === currentSong?.id ? "active-song" : ""}\`}
+                    className={`song-card ${song.id === currentSong?.id ? "active-song" : ""}`}
                     key={song.id}
                     onClick={() => changeSong(songIndex, true)}
                   >
@@ -970,7 +970,7 @@ useEffect(() => {
                         addToQueue(song);
                       }}
                       title="Add to Queue"
-                      aria-label={\`Add \${song.title} to queue\`}
+                      aria-label={`Add ${song.title} to queue`}
                     >
                       ＋
                     </button>
@@ -982,7 +982,7 @@ useEffect(() => {
                         e.stopPropagation();
                         changeSong(songIndex, true);
                       }}
-                      aria-label={\`Play \${song.title}\`}
+                      aria-label={`Play ${song.title}`}
                     >
                       {song.id === currentSong?.id && isPlaying ? "⏸" : "▶"}
                     </button>
@@ -1029,7 +1029,7 @@ useEffect(() => {
                           changeSong(songIndex, true);
                         }
                       }}
-                      aria-label={\`Play \${song.title}\`}
+                      aria-label={`Play ${song.title}`}
                     >
                       ▶
                     </button>
