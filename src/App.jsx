@@ -53,10 +53,6 @@ function App() {
     window.location.pathname === "" ||
     window.location.pathname === "/index.html";
 
-  if (!isKnownPath) {
-    return <NotFound />;
-  }
-
   const audioRef = useRef(null);
 const autoPlayRef = useRef(false);
   const audioContextRef = useRef(null);
@@ -777,7 +773,7 @@ useEffect(() => {
   };
 }, []);
 
-  return (
+  return isKnownPath ? (
     <div className="app">
 
    <audio
@@ -1602,6 +1598,8 @@ useEffect(() => {
   </div>
 )}
     </div>
+  ) : (
+    <NotFound />
   );
 
 }
