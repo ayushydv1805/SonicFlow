@@ -1331,3 +1331,73 @@ button {
 .local-play-btn:hover {
   transform: scale(1.08);
 }
+
+/* 404 page */
+.not-found {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 50% 0%, #222 0%, #0d0d0d 45%, #080808 100%);
+  color: white;
+}
+
+.not-found-card {
+  width: min(620px, 100%);
+  text-align: center;
+  padding: 54px 44px;
+  border: 1px solid #282828;
+  border-radius: 28px;
+  background: rgba(17, 17, 17, 0.92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.not-found-code {
+  display: block;
+  font-size: clamp(78px, 16vw, 150px);
+  line-height: 0.9;
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  color: #2f2f2f;
+}
+
+.not-found-icon {
+  margin-top: -6px;
+  font-size: 52px;
+}
+
+.not-found-label {
+  margin-top: 12px;
+  color: #777;
+  font-size: 11px;
+  letter-spacing: 3px;
+  font-weight: 700;
+}
+
+.not-found-card h1 {
+  margin-top: 12px;
+  font-size: clamp(30px, 5vw, 48px);
+}
+
+.not-found-card p:not(.not-found-label) {
+  max-width: 480px;
+  margin: 14px auto 0;
+  color: #888;
+  line-height: 1.7;
+}
+
+.not-found-card button {
+  margin-top: 28px;
+  padding: 13px 22px;
+  border: 1px solid #444;
+  border-radius: 24px;
+  background: white;
+  color: #080808;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.not-found-card button:hover {
+  transform: translateY(-1px);
+}
