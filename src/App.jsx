@@ -114,13 +114,23 @@ function SonicFlowPlayer() {
   const searchInputRef = useRef(null);
   const libraryRef = useRef(null);
 
-  songsRef.current = songs;
-  currentSongIndexRef.current = currentSongIndex;
-  queueRef.current = queue;
-  repeatRef.current = repeat;
-  shuffleRef.current = shuffle;
-  playbackSpeedRef.current = playbackSpeed;
-  localSongsRef.current = localSongs;
+  useEffect(() => {
+    songsRef.current = songs;
+    currentSongIndexRef.current = currentSongIndex;
+    queueRef.current = queue;
+    repeatRef.current = repeat;
+    shuffleRef.current = shuffle;
+    playbackSpeedRef.current = playbackSpeed;
+    localSongsRef.current = localSongs;
+  }, [
+    currentSongIndex,
+    localSongs,
+    playbackSpeed,
+    queue,
+    repeat,
+    shuffle,
+    songs,
+  ]);
 
   const currentSong = songs[currentSongIndex] || songs[0];
 
