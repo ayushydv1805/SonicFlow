@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import NotFound from "./NotFound";
 import { searchAudiusTracks } from "./audiusApi";
 import {
   saveLocalSongs,
@@ -47,6 +48,15 @@ const readStoredArray = (key) => {
 };
 
 function App() {
+  const isKnownPath =
+    window.location.pathname === "/" ||
+    window.location.pathname === "" ||
+    window.location.pathname === "/index.html";
+
+  if (!isKnownPath) {
+    return <NotFound />;
+  }
+
   const audioRef = useRef(null);
 const autoPlayRef = useRef(false);
   const audioContextRef = useRef(null);
