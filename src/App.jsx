@@ -35,6 +35,17 @@ const SONGS = [
   },
 ];
 
+const readStoredArray = (key) => {
+  try {
+    const saved = localStorage.getItem(key);
+    const parsed = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(\`Failed to read \${key}:\`, error);
+    return [];
+  }
+};
+
 function App() {
   const audioRef = useRef(null);
 const autoPlayRef = useRef(false);
@@ -57,15 +68,13 @@ const [songs, setSongs] = useState(SONGS);
 const [localSongs, setLocalSongs] = useState([]);
 const [search, setSearch] = useState("");
 
-const [likedSongs, setLikedSongs] = useState(() => {
-  const saved = localStorage.getItem("sonicflow-liked");
-  return saved ? JSON.parse(saved) : [];
-});
+const [likedSongs, setLikedSongs] = useState(() =>
+  readStoredArray("sonicflow-liked")
+);
 
-const [recentSongs, setRecentSongs] = useState(() => {
-  const saved = localStorage.getItem("sonicflow-recent");
-  return saved ? JSON.parse(saved) : [];
-});
+const [recentSongs, setRecentSongs] = useState(() =>
+  readStoredArray("sonicflow-recent")
+);
 const addToRecent = (song) => {
   setRecentSongs((prev) => {
     const filtered = prev.filter((item) => item.id !== song.id);
@@ -140,74 +149,6 @@ const handleLocalMusic = async (event) => {
     );
   });
 
-  const newLocalSongs = audioFiles.map((file, index) => ({
-    id: `local-${file.name}-${file.size}-${file.lastModified}`,
-    title: file.name.replace(/\.[^/.]+$/, ""),
-    artist: "Local Music",
-    cover: "🎵",
-    url: URL.createObjectURL(file),
-    file: file,
-    isLocal: true,
-    fileName: file.name,
-  }));
-
-  try {
-    await saveLocalSongs(newLocalSongs);
-
-    setLocalSongs((prev) => {
-      const existingIds = new Set(prev.map((song) => song.id));
-
-      const uniqueSongs = newLocalSongs.filter(
-        (song) => !existingIds.has(song.id)
-      );
-
-      return [...prev, ...uniqueSongs];
-    });
-
-    setSongs((prev) => {
-      const onlineSongs = prev.filter((song) => !song.isLocal);
-
-      const existingLocalSongs = prev.filter(
-        (song) => song.isLocal
-      );
-
-      const existingIds = new Set(
-        existingLocalSongs.map((song) => song.id)
-      );
-
-      const uniqueSongs = newLocalSongs.filter(
-        (song) => !existingIds.has(song.id)
-      );
-
-      return [
-        ...onlineSongs,
-        ...existingLocalSongs,
-        ...uniqueSongs,
-      ];
-    });
-
-    console.log(`${newLocalSongs.length} songs saved`);
-  } catch (error) {
-    console.error("Failed to save local music:", error);
-  }
-
-  event.target.value = "";
-};
-
-  const newLocalSongs = audioFiles.map((file, index) => ({
-    id: `local-${Date.now()}-${index}`,
-    title: file.name.replace(/\.[^/.]+$/, ""),
-    artist: "Local Music",
-    cover: "🎵",
-    url: URL.createObjectURL(file),
-    isLocal: true,
-    fileName: file.name,
-  }));
-
-  setLocalSongs((prev) => [...prev, ...newLocalSongs]);
-
-  setSongs((prev) => [...prev, ...newLocalSongs]);
-};
 const searchAudius = async () => {
   if (!search.trim()) {
     setAudiusSongs([]);
@@ -455,36 +396,34 @@ analyserRef.current = analyser;
   useEffect(() => {
     const audio = audioRef.current;
 
+    if (!audio) return;
+
     const updateTime = () => {
       setCurrentTime(audio.currentTime);
     };
 
     const loaded = () => {
-      setDuration(audio.duration);
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
     };
 
-const ended = () => {
-  const audio = audioRef.current;
+    const ended = () => {
+      if (repeatRef.current) {
+        audio.currentTime = 0;
 
-  if (!audio) return;
+        audio.play()
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch((error) => {
+            console.error("Repeat play failed:", error);
+            setIsPlaying(false);
+          });
 
-  if (repeatRef.current) {
-    audio.currentTime = 0;
+        return;
+      }
 
-    audio.play()
-      .then(() => {
-        setIsPlaying(true);
-      })
-      .catch((error) => {
-        console.error("Repeat play failed:", error);
-        setIsPlaying(false);
-      });
-
-    return;
-  }
-
-  nextSong();
-};
+      nextSong();
+    };
 
     audio.addEventListener("timeupdate", updateTime);
     audio.addEventListener("loadedmetadata", loaded);
@@ -495,7 +434,7 @@ const ended = () => {
       audio.removeEventListener("loadedmetadata", loaded);
       audio.removeEventListener("ended", ended);
     };
-}, []);
+  }, [nextSong]);
 
   // -----------------------------
   // VOLUME
@@ -630,49 +569,68 @@ const applyPreset = (name) => {
   };
 
 const changeSong = (index, shouldPlay = false) => {
+  const song = songs[index];
   const audio = audioRef.current;
+
+  if (!song) return;
 
   if (audio) {
     audio.pause();
   }
 
   autoPlayRef.current = shouldPlay;
-
   setCurrentSongIndex(index);
   setCurrentTime(0);
   setIsPlaying(shouldPlay);
-
-  addToRecent(songs[index]);
+  addToRecent(song);
 };
-const addToQueue = (song) => {
-  setQueue((prev) => {
-    const alreadyExists = prev.some((item) => item.id === song.id);
 
-    if (alreadyExists) {
+const addToQueue = (song) => {
+  if (!song) return;
+
+  setQueue((prev) => {
+    if (prev.some((item) => item.id === song.id)) {
       return prev;
     }
 
     return [...prev, song];
   });
 };
+
 const removeFromQueue = (songId) => {
-  setQueue((prev) =>
-    prev.filter((song) => song.id !== songId)
-  );
+  setQueue((prev) => prev.filter((song) => song.id !== songId));
 };
+
 const clearQueue = () => {
   setQueue([]);
 };
+
 const nextSong = () => {
+  if (!songs.length) return;
+
+  const shouldPlay = audioRef.current
+    ? !audioRef.current.paused
+    : false;
+
+  if (queue.length > 0) {
+    const queuedSong = queue[0];
+    const queuedIndex = songs.findIndex(
+      (song) => song.id === queuedSong.id
+    );
+
+    if (queuedIndex !== -1) {
+      setQueue((prev) => prev.slice(1));
+      changeSong(queuedIndex, shouldPlay);
+      return;
+    }
+  }
+
   let nextIndex;
 
-  if (shuffleRef.current) {
+  if (shuffleRef.current && songs.length > 1) {
     do {
       nextIndex = Math.floor(Math.random() * songs.length);
-    } while (
-      songs.length > 1 &&
-      nextIndex === currentSongIndex
-    );
+    } while (nextIndex === currentSongIndex);
   } else {
     nextIndex =
       currentSongIndex === songs.length - 1
@@ -680,14 +638,12 @@ const nextSong = () => {
         : currentSongIndex + 1;
   }
 
-  const shouldPlay = audioRef.current
-    ? !audioRef.current.paused
-    : false;
-
   changeSong(nextIndex, shouldPlay);
 };
 
 const previousSong = () => {
+  if (!songs.length) return;
+
   const previousIndex =
     currentSongIndex === 0
       ? songs.length - 1
@@ -699,14 +655,16 @@ const previousSong = () => {
 
   changeSong(previousIndex, shouldPlay);
 };
+
 useEffect(() => {
   const audio = audioRef.current;
 
-  if (!audio) {
+  if (!audio || !currentSong?.url) {
     return;
   }
 
   audio.src = currentSong.url;
+  audio.playbackRate = playbackSpeed;
   audio.load();
 
   setCurrentTime(0);
@@ -722,7 +680,7 @@ useEffect(() => {
         setIsPlaying(false);
       });
   }
-}, [currentSongIndex]);
+}, [currentSong, playbackSpeed]);
 
 const toggleLike = (song) => {
   setLikedSongs((prev) => {
@@ -758,64 +716,57 @@ const toggleLike = (song) => {
       .toString()
       .padStart(2, "0")}`;
   };
+const stopVisualizer = () => {
+  if (animationRef.current) {
+    cancelAnimationFrame(animationRef.current);
+    animationRef.current = null;
+  }
+};
+
 const drawVisualizer = () => {
   const canvas = canvasRef.current;
   const analyser = analyserRef.current;
 
-  if (!canvas || !analyser) {
-    return;
-  }
+  if (!canvas || !analyser) return;
+
+  stopVisualizer();
 
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
 
   const bufferLength = analyser.frequencyBinCount;
   const dataArray = new Uint8Array(bufferLength);
 
   const draw = () => {
+    if (!analyserRef.current || !canvasRef.current) return;
+
     animationRef.current = requestAnimationFrame(draw);
-
     analyser.getByteFrequencyData(dataArray);
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const barWidth = canvas.width / bufferLength;
 
-    for (let i = 0; i < bufferLength; i++) {
+    for (let i = 0; i < bufferLength; i += 1) {
       const value = dataArray[i];
-
       const barHeight = (value / 255) * canvas.height;
-
       const x = i * barWidth;
-
       const y = canvas.height - barHeight;
 
       ctx.fillStyle = "white";
-
-      ctx.fillRect(
-        x,
-        y,
-        Math.max(barWidth - 2, 1),
-        barHeight
-      );
+      ctx.fillRect(x, y, Math.max(barWidth - 2, 1), barHeight);
     }
   };
-const addToRecent = (song) => {
-  setRecentSongs((prev) => {
-    const updated = [
-      song.id,
-      ...prev.filter((id) => id !== song.id),
-    ].slice(0, 10);
 
-    localStorage.setItem(
-      "sonicflow-recent",
-      JSON.stringify(updated)
-    );
-
-    return updated;
-  });
-};
   draw();
 };
+
+useEffect(() => {
+  return () => {
+    stopVisualizer();
+    clearTimeout(sleepTimerRef.current);
+  };
+}, []);
+
   return (
     <div className="app">
 
@@ -871,265 +822,224 @@ const addToRecent = (song) => {
       <main className="main">
 
         <header className="topbar">
-
           <div>
-
-            <p className="greeting">
-              WELCOME BACK
-            </p>
-
-            <h1>
-              Good evening, Ayush 👋
-            </h1>
-
+            <p className="greeting">WELCOME BACK</p>
+            <h1>Good evening, Ayush 👋</h1>
           </div>
-<div className="search-box">
-  <span>🔍</span>
-  <input
-    type="text"
-    placeholder="Search songs or artists..."
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-  />
-  <button onClick={searchAudius}>
-  Search Audius
-</button>
-<label className="local-music-btn">
-  📁 Select Music Folder
 
-  <input
-    type="file"
-    accept="audio/*"
-    multiple
-    webkitdirectory=""
-    onChange={handleLocalMusic}
-    hidden
-  />
-</label>
-{audiusLoading && (
-  <div className="audius-loading">
-    Loading songs...
-  </div>
-)}
-
-{audiusError && (
-  <div className="audius-error">
-    {audiusError}
-  </div>
-)}
-
-{audiusSongs.length > 0 && (
-  <section className="audius-results">
-    <div className="audius-results-header">
-      <h2>Search Results</h2>
-      <span>{audiusSongs.length} tracks</span>
-    </div>
-
-    <div className="audius-grid">
-      {audiusSongs.map((song) => (
-        <div className="audius-card" key={song.id}>
-          
-          <div className="audius-cover">
-            {song.artwork?._480x480 ? (
-              <img
-                src={song.artwork._480x480}
-                alt={song.title}
+          <div className="search-box">
+            <span>🔍</span>
+            <input
+              type="text"
+              placeholder="Search songs or artists..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search songs or artists"
+            />
+            <button type="button" onClick={searchAudius}>
+              Search Audius
+            </button>
+            <label className="local-music-btn">
+              📁 Select Music Folder
+              <input
+                type="file"
+                accept="audio/*"
+                multiple
+                webkitdirectory=""
+                onChange={handleLocalMusic}
+                hidden
               />
-            ) : (
-              <div className="audius-cover-placeholder">
-                🎵
-              </div>
-            )}
+            </label>
           </div>
 
-          <div className="audius-info">
-            <h3>{song.title}</h3>
-
-            <p>
-              {song.user?.name || "Unknown Artist"}
-            </p>
-          </div>
-
-         <button
-  className="audius-play-btn"
-  title="Play"
-  onClick={() => playAudiusSong(song)}
->
-  ▶
-</button>
-
-        </div>
-      ))}
-    </div>
-  </section>
-)}
-</div>
-          <div className="profile-avatar">
+          <div className="profile-avatar" aria-label="Profile">
             A
           </div>
-
         </header>
 
-        {/* HERO */}
+        {audiusLoading && (
+          <div className="audius-loading">
+            Loading songs...
+          </div>
+        )}
+
+        {audiusError && (
+          <div className="audius-error">
+            {audiusError}
+          </div>
+        )}
+
+        {audiusSongs.length > 0 && (
+          <section className="audius-results">
+            <div className="audius-results-header">
+              <h2>Search Results</h2>
+              <span>{audiusSongs.length} tracks</span>
+            </div>
+
+            <div className="audius-grid">
+              {audiusSongs.map((song) => (
+                <div className="audius-card" key={song.id}>
+                  <div className="audius-cover">
+                    {song.artwork?._480x480 ? (
+                      <img
+                        src={song.artwork._480x480}
+                        alt={song.title}
+                      />
+                    ) : (
+                      <div className="audius-cover-placeholder">
+                        🎵
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="audius-info">
+                    <h3>{song.title}</h3>
+                    <p>{song.user?.name || "Unknown Artist"}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="audius-play-btn"
+                    title="Play"
+                    onClick={() => playAudiusSong(song)}
+                  >
+                    ▶
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="hero">
-
           <div>
-
-            <p className="hero-label">
-              YOUR MUSIC EXPERIENCE
-            </p>
-
+            <p className="hero-label">YOUR MUSIC EXPERIENCE</p>
             <h2>
               Music without
               <br />
               <span>limits.</span>
             </h2>
-
             <p className="hero-text">
-              High quality music with powerful
-              controls, personalized playlists
+              High quality music with powerful controls, personalized playlists
               and an immersive experience.
             </p>
-
-            <button
-              className="start-btn"
-              onClick={togglePlay}
-            >
-              {isPlaying
-                ? "⏸ Pause Music"
-                : "▶ Start Listening"}
+            <button type="button" className="start-btn" onClick={togglePlay}>
+              {isPlaying ? "⏸ Pause Music" : "▶ Start Listening"}
             </button>
-
           </div>
 
           <div className="hero-art">
-
-            <div className="disc">
-              🎵
-            </div>
-
+            <div className="disc">🎵</div>
           </div>
-
         </section>
 
-<section className="library-section">
-  <div className="section-header">
-    <div>
-      <h2>Music Library</h2>
-      <p>Discover your favorite tracks</p>
-    </div>
-    <span>{filteredSongs.length} songs</span>
-  </div>
-
-  <div className="song-list">
-    {filteredSongs.length > 0 ? (
-      filteredSongs.map((song) => (
-        <div
-          className={`song-card ${
-            song.id === currentSong.id ? "active-song" : ""
-          }`}
-          key={song.id}
-          onClick={() => {
-            setCurrentSongIndex(
-              songs.findIndex((item) => item.id === song.id)
-            );
-            addToRecent(song);
-            setIsPlaying(true);
-
-            setTimeout(() => {
-              audioRef.current?.play();
-            }, 100);
-          }}
-        >
-          <div className="song-cover">
-            {song.cover}
+        <section className="library-section">
+          <div className="section-header">
+            <div>
+              <h2>Music Library</h2>
+              <p>Discover your favorite tracks</p>
+            </div>
+            <span>{filteredSongs.length} songs</span>
           </div>
 
-          <div className="song-info">
-            <h3>{song.title}</h3>
-            <p>{song.artist}</p>
+          <div className="song-list">
+            {filteredSongs.length > 0 ? (
+              filteredSongs.map((song) => {
+                const songIndex = songs.findIndex(
+                  (item) => item.id === song.id
+                );
+
+                return (
+                  <div
+                    className={\`song-card \${song.id === currentSong?.id ? "active-song" : ""}\`}
+                    key={song.id}
+                    onClick={() => changeSong(songIndex, true)}
+                  >
+                    <div className="song-cover">{song.cover}</div>
+
+                    <div className="song-info">
+                      <h3>{song.title}</h3>
+                      <p>{song.artist}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="queue-add-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToQueue(song);
+                      }}
+                      title="Add to Queue"
+                      aria-label={\`Add \${song.title} to queue\`}
+                    >
+                      ＋
+                    </button>
+
+                    <button
+                      type="button"
+                      className="song-play"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        changeSong(songIndex, true);
+                      }}
+                      aria-label={\`Play \${song.title}\`}
+                    >
+                      {song.id === currentSong?.id && isPlaying ? "⏸" : "▶"}
+                    </button>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="no-results">
+                <div>🔎</div>
+                <h3>No songs found</h3>
+                <p>Try searching for another song or artist.</p>
+              </div>
+            )}
           </div>
-<button
-  className="queue-add-btn"
-  onClick={(e) => {
-    e.stopPropagation();
-    addToQueue(song);
-  }}
-  title="Add to Queue"
->
-  ＋
-</button>
-          <button
-            className="song-play"
-            onClick={(e) => {
-              e.stopPropagation();
+        </section>
 
-              const index = songs.findIndex(
-                (item) => item.id === song.id
-              );
-{localSongs.length > 0 && (
-  <section className="local-music-section">
-    <div className="local-music-header">
-      <h2>🎵 Local Music</h2>
-      <span>{localSongs.length} songs</span>
-    </div>
+        {localSongs.length > 0 && (
+          <section className="local-music-section">
+            <div className="local-music-header">
+              <h2>🎵 Local Music</h2>
+              <span>{localSongs.length} songs</span>
+            </div>
 
-    <div className="local-music-list">
-      {localSongs.map((song) => (
-        <div className="local-song-card" key={song.id}>
-          
-          <div className="local-song-cover">
-            🎵
-          </div>
+            <div className="local-music-list">
+              {localSongs.map((song) => {
+                const songIndex = songs.findIndex(
+                  (item) => item.id === song.id
+                );
 
-          <div className="local-song-info">
-            <h3>{song.title}</h3>
-            <p>{song.artist}</p>
-          </div>
+                return (
+                  <div className="local-song-card" key={song.id}>
+                    <div className="local-song-cover">🎵</div>
 
-          <button
-            className="local-play-btn"
-            onClick={() => {
-              const index = songs.findIndex(
-                (item) => item.id === song.id
-              );
+                    <div className="local-song-info">
+                      <h3>{song.title}</h3>
+                      <p>{song.artist}</p>
+                    </div>
 
-              if (index !== -1) {
-                changeSong(index, true);
-              }
-            }}
-          >
-            ▶
-          </button>
+                    <button
+                      type="button"
+                      className="local-play-btn"
+                      onClick={() => {
+                        if (songIndex !== -1) {
+                          changeSong(songIndex, true);
+                        }
+                      }}
+                      aria-label={\`Play \${song.title}\`}
+                    >
+                      ▶
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
-        </div>
-      ))}
-    </div>
-  </section>
-)}
-              setCurrentSongIndex(index);
-
-              setTimeout(() => {
-                audioRef.current?.play();
-              }, 100);
-
-              setIsPlaying(true);
-            }}
-          >
-            {song.id === currentSong.id && isPlaying ? "⏸" : "▶"}
-          </button>
-        </div>
-      ))
-    ) : (
-      <div className="no-results">
-        <div>🔎</div>
-        <h3>No songs found</h3>
-        <p>Try searching for another song or artist.</p>
-      </div>
-    )}
-  </div>
-</section>
 {/* NOW PLAYING */}
 
 <section className="now-playing-page">
