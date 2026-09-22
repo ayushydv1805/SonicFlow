@@ -115,7 +115,18 @@ function SonicFlowPlayer() {
   const playbackSpeedRef = useRef(1);
   const localSongsRef = useRef([]);
 
-  const [songs, setSongs] = useState(SONGS);
+  const [songs, setSongs] = useState(() => {
+    const savedPlaylistItems = readStoredArray("sonicflow-playlist-items");
+    const savedRemoteTracks = savedPlaylistItems.filter(
+      (item) => !item.isLocal && item.url
+    );
+    const existingIds = new Set(SONGS.map((song) => song.id));
+
+    return [
+      ...SONGS,
+      ...savedRemoteTracks.filter((song) => !existingIds.has(song.id)),
+    ];
+  });
   const [localSongs, setLocalSongs] = useState([]);
   const [likedSongs, setLikedSongs] = useState(() =>
     readStoredArray("sonicflow-liked")
@@ -923,23 +934,6 @@ function SonicFlowPlayer() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    const savedRemoteTracks = playlistItems.filter(
-      (item) => !item.isLocal && item.url
-    );
-
-    if (!savedRemoteTracks.length) return;
-
-    setSongs((prev) => {
-      const existingIds = new Set(prev.map((song) => song.id));
-      const missingTracks = savedRemoteTracks.filter(
-        (song) => !existingIds.has(song.id)
-      );
-
-      return missingTracks.length ? [...prev, ...missingTracks] : prev;
-    });
-  }, [playlistItems]);
 
   useEffect(() => {
     const audio = audioRef.current;
