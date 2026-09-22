@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { searchAudiusTracks } from "./audiusApi";
-import { getLocalSongs, saveLocalSongs } from "./localMusicDB";
+import {
+  clearLocalSongs,
+  deleteLocalSong,
+  getLocalSongs,
+  requestPersistentStorage,
+  saveLocalSongs,
+} from "./localMusicDB";
 import NotFound from "./NotFound";
 
 const SONGS = [
@@ -58,6 +64,20 @@ const readStoredArray = (key) => {
   }
 };
 
+const readStoredNumber = (key, fallback, min, max) => {
+  try {
+    const saved = localStorage.getItem(key);
+    const value = Number(saved);
+
+    if (!Number.isFinite(value)) return fallback;
+    if (value < min || value > max) return fallback;
+
+    return value;
+  } catch {
+    return fallback;
+  }
+};
+
 const readRecentIds = () =>
   readStoredArray("sonicflow-recent")
     .map((item) => (typeof item === "object" ? item?.id : item))
@@ -96,14 +116,24 @@ function SonicFlowPlayer() {
   const [audiusSongs, setAudiusSongs] = useState([]);
   const [audiusLoading, setAudiusLoading] = useState(false);
   const [audiusError, setAudiusError] = useState("");
+  const [localMusicStatus, setLocalMusicStatus] = useState("");
+  const [localMusicError, setLocalMusicError] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(100);
-  const [bass, setBass] = useState(100);
-  const [treble, setTreble] = useState(100);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [volume, setVolume] = useState(() =>
+    readStoredNumber("sonicflow-volume", 100, 0, 300)
+  );
+  const [bass, setBass] = useState(() =>
+    readStoredNumber("sonicflow-bass", 100, 0, 300)
+  );
+  const [treble, setTreble] = useState(() =>
+    readStoredNumber("sonicflow-treble", 100, 0, 300)
+  );
+  const [playbackSpeed, setPlaybackSpeed] = useState(() =>
+    readStoredNumber("sonicflow-speed", 1, 0.25, 3)
+  );
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState(false);
   const [sleepTimer, setSleepTimer] = useState(0);
@@ -432,7 +462,15 @@ function SonicFlowPlayer() {
     }));
 
     try {
+      const persistent = await requestPersistentStorage();
       await saveLocalSongs(newLocalSongs);
+
+      setLocalMusicError("");
+      setLocalMusicStatus(
+        persistent
+          ? "Saved locally. Your music will be available when you reopen SonicFlow."
+          : "Saved locally for this browser. Storage persistence could not be guaranteed."
+      );
 
       setLocalSongs((prev) => {
         const existingIds = new Set(prev.map((song) => song.id));
@@ -523,6 +561,7 @@ function SonicFlowPlayer() {
   const handleVolume = (event) => {
     const value = Number(event.target.value);
     setVolume(value);
+    localStorage.setItem("sonicflow-volume", String(value));
 
     if (gainRef.current) {
       gainRef.current.gain.value = value / 100;
@@ -532,6 +571,7 @@ function SonicFlowPlayer() {
   const handleBass = (event) => {
     const value = Number(event.target.value);
     setBass(value);
+    localStorage.setItem("sonicflow-bass", String(value));
 
     if (bassRef.current) {
       bassRef.current.gain.value = (value - 100) * 0.06;
@@ -541,6 +581,7 @@ function SonicFlowPlayer() {
   const handleTreble = (event) => {
     const value = Number(event.target.value);
     setTreble(value);
+    localStorage.setItem("sonicflow-treble", String(value));
 
     if (trebleRef.current) {
       trebleRef.current.gain.value = (value - 100) * 0.06;
@@ -576,6 +617,7 @@ function SonicFlowPlayer() {
     const speed = Number(event.target.value);
     setPlaybackSpeed(speed);
     playbackSpeedRef.current = speed;
+    localStorage.setItem("sonicflow-speed", String(speed));
 
     if (audioRef.current) {
       audioRef.current.playbackRate = speed;
@@ -637,6 +679,58 @@ function SonicFlowPlayer() {
     setQueue([]);
   };
 
+  const handleDeleteLocalSong = async (songId) => {
+    const song = localSongs.find((item) => item.id === songId);
+
+    try {
+      await deleteLocalSong(songId);
+
+      if (song?.url?.startsWith("blob:")) {
+        URL.revokeObjectURL(song.url);
+      }
+
+      setLocalSongs((prev) => prev.filter((item) => item.id !== songId));
+
+      setSongs((prev) => {
+        const nextSongs = prev.filter((item) => item.id !== songId);
+        const nextIndex =
+          currentSong?.id === songId
+            ? 0
+            : Math.min(currentSongIndex, Math.max(nextSongs.length - 1, 0));
+
+        setCurrentSongIndex(nextIndex);
+        return nextSongs.length ? nextSongs : SONGS;
+      });
+
+      setLocalMusicError("");
+      setLocalMusicStatus("Track removed from your local library.");
+    } catch (error) {
+      console.error("Failed to remove local song:", error);
+      setLocalMusicError("Unable to remove that local track.");
+    }
+  };
+
+  const handleClearLocalMusic = async () => {
+    try {
+      await clearLocalSongs();
+
+      localSongs.forEach((song) => {
+        if (song.url?.startsWith("blob:")) {
+          URL.revokeObjectURL(song.url);
+        }
+      });
+
+      setLocalSongs([]);
+      setSongs((prev) => prev.filter((song) => !song.isLocal));
+      setCurrentSongIndex(0);
+      setLocalMusicError("");
+      setLocalMusicStatus("Local library cleared.");
+    } catch (error) {
+      console.error("Failed to clear local music:", error);
+      setLocalMusicError("Unable to clear the local library.");
+    }
+  };
+
   const filteredSongs = useMemo(() => {
     const term = search.trim().toLowerCase();
     let result = songs;
@@ -670,40 +764,70 @@ function SonicFlowPlayer() {
   };
 
   useEffect(() => {
+    const handleKeyboard = (event) => {
+      const target = event.target;
+
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        togglePlayPause();
+      } else if (event.code === "ArrowRight") {
+        nextSong();
+      } else if (event.code === "ArrowLeft") {
+        previousSong();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyboard);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyboard);
+    };
+  }, [nextSong, previousSong, togglePlayPause]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadLocalMusic() {
       try {
         const savedSongs = await getLocalSongs();
 
-        if (cancelled || !Array.isArray(savedSongs) || !savedSongs.length) {
+        if (cancelled) return;
+
+        if (!savedSongs.length) {
+          setLocalSongs([]);
           return;
         }
 
-        const songsWithUrls = savedSongs.map((song) => ({
-          ...song,
-          url: URL.createObjectURL(song.file),
-          isLocal: true,
-        }));
-
-        if (cancelled) {
-          songsWithUrls.forEach((song) => URL.revokeObjectURL(song.url));
-          return;
-        }
-
-        setLocalSongs(songsWithUrls);
+        setLocalSongs(savedSongs);
+        setLocalMusicError("");
+        setLocalMusicStatus(
+          savedSongs.length +
+            (savedSongs.length === 1 ? " saved track" : " saved tracks") +
+            " restored from your local library."
+        );
 
         setSongs((prev) => {
           const existingIds = new Set(prev.map((song) => song.id));
           return [
             ...prev,
-            ...songsWithUrls.filter((song) => !existingIds.has(song.id)),
+            ...savedSongs.filter((song) => !existingIds.has(song.id)),
           ];
         });
       } catch (error) {
         console.error("Failed to load local music:", error);
+        setLocalMusicError(
+          "Your saved local music could not be loaded. Try selecting the folder again."
+        );
       }
-    }
+    };
 
     loadLocalMusic();
 
@@ -1088,38 +1212,80 @@ function SonicFlowPlayer() {
           </div>
         </section>
 
-        {localSongs.length > 0 && (
+        {(localSongs.length > 0 || localMusicError) && (
           <section className="local-music-section">
             <div className="local-music-header">
-              <h2>🎵 Local Music</h2>
-              <span>{localSongs.length} songs</span>
+              <div>
+                <h2>🎵 Local Music</h2>
+                <p className="local-music-status">
+                  {localSongs.length
+                    ? localSongs.length +
+                      (localSongs.length === 1 ? " track" : " tracks") +
+                      " stored in this browser"
+                    : "No local tracks saved yet"}
+                </p>
+              </div>
+
+              {localSongs.length > 0 && (
+                <button
+                  type="button"
+                  className="local-clear-btn"
+                  onClick={handleClearLocalMusic}
+                >
+                  Clear Library
+                </button>
+              )}
             </div>
 
-            <div className="local-music-list">
-              {localSongs.map((song) => (
-                <article className="local-song-card" key={song.id}>
-                  <div className="local-song-cover">🎵</div>
+            {localMusicStatus && (
+              <p className="local-music-success" role="status">
+                {localMusicStatus}
+              </p>
+            )}
 
-                  <div className="local-song-info">
-                    <h3>{song.title}</h3>
-                    <p>{song.artist}</p>
-                  </div>
+            {localMusicError && (
+              <p className="local-music-error" role="alert">
+                {localMusicError}
+              </p>
+            )}
 
-                  <button
-                    type="button"
-                    className="local-play-btn"
-                    onClick={() =>
-                      handleSongSelect(
-                        songs.findIndex((item) => item.id === song.id)
-                      )
-                    }
-                    aria-label={"Play " + song.title}
-                  >
-                    ▶
-                  </button>
-                </article>
-              ))}
-            </div>
+            {localSongs.length > 0 && (
+              <div className="local-music-list">
+                {localSongs.map((song) => (
+                  <article className="local-song-card" key={song.id}>
+                    <div className="local-song-cover">🎵</div>
+
+                    <div className="local-song-info">
+                      <h3>{song.title}</h3>
+                      <p>{song.artist}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="local-play-btn"
+                      onClick={() =>
+                        handleSongSelect(
+                          songs.findIndex((item) => item.id === song.id)
+                        )
+                      }
+                      aria-label={"Play " + song.title}
+                    >
+                      ▶
+                    </button>
+
+                    <button
+                      type="button"
+                      className="local-delete-btn"
+                      onClick={() => handleDeleteLocalSong(song.id)}
+                      aria-label={"Remove " + song.title}
+                      title="Remove from local library"
+                    >
+                      ✕
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
