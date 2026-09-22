@@ -846,6 +846,11 @@ function SonicFlowPlayer() {
     window.setTimeout(() => searchInputRef.current?.focus(), 250);
   };
 
+  const goHome = () => {
+    setViewFilter("all");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   useEffect(() => {
     const handleKeyboard = (event) => {
       const target = event.target;
@@ -1041,7 +1046,7 @@ function SonicFlowPlayer() {
           <button
             type="button"
             className={viewFilter === "all" ? "nav-item active" : "nav-item"}
-            onClick={() => scrollToLibrary("all")}
+            onClick={goHome}
           >
             🏠 <span>Home</span>
           </button>
@@ -1886,10 +1891,29 @@ function SonicFlowPlayer() {
       {showQueue && (
         <aside className="queue-panel" role="dialog" aria-label="Queue">
           <div className="queue-header">
-            <h2>Queue</h2>
-            <button type="button" onClick={clearQueue}>
-              Clear
-            </button>
+            <div>
+              <p className="queue-eyebrow">UP NEXT</p>
+              <h2>Queue</h2>
+            </div>
+
+            <div className="queue-header-actions">
+              <button
+                type="button"
+                onClick={clearQueue}
+                disabled={queue.length === 0}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="queue-close"
+                onClick={() => setShowQueue(false)}
+                aria-label="Close queue"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {queue.length === 0 ? (
