@@ -109,6 +109,9 @@ function SonicFlowPlayer() {
   const [likedSongs, setLikedSongs] = useState(() =>
     readStoredArray("sonicflow-liked")
   );
+  const [playlistSongs, setPlaylistSongs] = useState(() =>
+    readStoredArray("sonicflow-playlist")
+  );
   const [recentSongs, setRecentSongs] = useState(readRecentIds);
   const [queue, setQueue] = useState([]);
   const [search, setSearch] = useState("");
@@ -317,14 +320,14 @@ function SonicFlowPlayer() {
     [addToRecent]
   );
 
-  const nextSong = useCallback(() => {
+  const nextSong = useCallback((forcePlay = false) => {
     const availableSongs = songsRef.current;
 
     if (!availableSongs.length) return;
 
-    const shouldPlay = audioRef.current
-      ? !audioRef.current.paused
-      : false;
+    const shouldPlay =
+      forcePlay ||
+      (audioRef.current ? !audioRef.current.paused : false);
 
     const queuedSong = queueRef.current[0];
 
@@ -679,6 +682,25 @@ function SonicFlowPlayer() {
     setQueue([]);
   };
 
+  const togglePlaylist = (song) => {
+    if (!song) return;
+
+    setPlaylistSongs((prev) => {
+      const exists = prev.includes(song.id);
+      const updated = exists
+        ? prev.filter((id) => id !== song.id)
+        : [...prev, song.id];
+
+      localStorage.setItem("sonicflow-playlist", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearPlaylist = () => {
+    setPlaylistSongs([]);
+    localStorage.setItem("sonicflow-playlist", JSON.stringify([]));
+  };
+
   const handleDeleteLocalSong = async (songId) => {
     const song = localSongs.find((item) => item.id === songId);
 
@@ -752,8 +774,20 @@ function SonicFlowPlayer() {
       result = result.filter((song) => recentSet.has(song.id));
     }
 
+    if (viewFilter === "playlist") {
+      const playlistSet = new Set(playlistSongs);
+      result = result.filter((song) => playlistSet.has(song.id));
+    }
+
     return result;
-  }, [likedSongs, recentSongs, search, songs, viewFilter]);
+  }, [
+    likedSongs,
+    playlistSongs,
+    recentSongs,
+    search,
+    songs,
+    viewFilter,
+  ]);
 
   const scrollToLibrary = (filter) => {
     setViewFilter(filter);
@@ -761,6 +795,11 @@ function SonicFlowPlayer() {
       behavior: "smooth",
       block: "start",
     });
+  };
+
+  const focusSearch = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.setTimeout(() => searchInputRef.current?.focus(), 250);
   };
 
   useEffect(() => {
@@ -892,7 +931,7 @@ function SonicFlowPlayer() {
         return;
       }
 
-      nextSong();
+      nextSong(true);
     };
 
     audio.addEventListener("timeupdate", updateTime);
@@ -949,7 +988,7 @@ function SonicFlowPlayer() {
           <button
             type="button"
             className="nav-item"
-            onClick={() => searchInputRef.current?.focus()}
+            onClick={focusSearch}
           >
             🔍 <span>Search</span>
           </button>
@@ -974,6 +1013,16 @@ function SonicFlowPlayer() {
             onClick={() => scrollToLibrary("recent")}
           >
             🎵 <span>Recently Played</span>
+          </button>
+
+          <button
+            type="button"
+            className={
+              viewFilter === "playlist" ? "nav-item active" : "nav-item"
+            }
+            onClick={() => scrollToLibrary("playlist")}
+          >
+            🎼 <span>My Playlist</span>
           </button>
 
           <button
@@ -1117,7 +1166,9 @@ function SonicFlowPlayer() {
                   ? "Liked Songs"
                   : viewFilter === "recent"
                     ? "Recently Played"
-                    : "Music Library"}
+                    : viewFilter === "playlist"
+                      ? "My Playlist"
+                      : "Music Library"}
               </h2>
 
               <p>
@@ -1125,17 +1176,30 @@ function SonicFlowPlayer() {
                   ? "Your favorite tracks"
                   : viewFilter === "recent"
                     ? "Your listening history"
-                    : "Discover your favorite tracks"}
+                    : viewFilter === "playlist"
+                      ? "Your saved playlist"
+                      : "Discover your favorite tracks"}
               </p>
             </div>
 
-            <button
-              type="button"
-              className="section-header-reset"
-              onClick={() => setViewFilter("all")}
-            >
-              {filteredSongs.length} songs · See all
-            </button>
+            {viewFilter === "playlist" ? (
+              <button
+                type="button"
+                className="section-header-reset"
+                onClick={clearPlaylist}
+                disabled={playlistSongs.length === 0}
+              >
+                {playlistSongs.length} saved · Clear playlist
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="section-header-reset"
+                onClick={() => setViewFilter("all")}
+              >
+                {filteredSongs.length} songs · See all
+              </button>
+            )}
           </div>
 
           <div className="song-list">
@@ -1173,6 +1237,28 @@ function SonicFlowPlayer() {
 
                     <button
                       type="button"
+                      className={
+                        playlistSongs.includes(song.id)
+                          ? "queue-add-btn playlist-active"
+                          : "queue-add-btn"
+                      }
+                      onClick={() => togglePlaylist(song)}
+                      title={
+                        playlistSongs.includes(song.id)
+                          ? "Remove from My Playlist"
+                          : "Add to My Playlist"
+                      }
+                      aria-label={
+                        playlistSongs.includes(song.id)
+                          ? "Remove " + song.title + " from My Playlist"
+                          : "Add " + song.title + " to My Playlist"
+                      }
+                    >
+                      {playlistSongs.includes(song.id) ? "✓" : "🎼"}
+                    </button>
+
+                    <button
+                      type="button"
                       className="queue-add-btn"
                       onClick={() => addToQueue(song)}
                       title="Add to Queue"
@@ -1205,7 +1291,9 @@ function SonicFlowPlayer() {
                     ? "You have not liked any songs yet."
                     : viewFilter === "recent"
                       ? "Play a song to build your listening history."
-                      : "Try another search or artist name."}
+                      : viewFilter === "playlist"
+                        ? "Add songs to My Playlist using the 🎼 button."
+                        : "Try another search or artist name."}
                 </p>
               </div>
             )}
@@ -1319,6 +1407,16 @@ function SonicFlowPlayer() {
                 {currentSong && likedSongs.includes(currentSong.id)
                   ? "♥"
                   : "♡"}
+              </button>
+
+              <button
+                type="button"
+                className="add-button"
+                onClick={() => togglePlaylist(currentSong)}
+              >
+                {currentSong && playlistSongs.includes(currentSong.id)
+                  ? "✓ In My Playlist"
+                  : "＋ Add to Playlist"}
               </button>
 
               <button
@@ -1557,11 +1655,11 @@ function SonicFlowPlayer() {
             <button
               type="button"
               className="music-card"
-              onClick={() => scrollToLibrary("all")}
+              onClick={() => scrollToLibrary("playlist")}
             >
-              <div className="cover">🎹</div>
-              <h3>Focus Mode</h3>
-              <p>Return to the full library</p>
+              <div className="cover">🎼</div>
+              <h3>My Playlist</h3>
+              <p>{playlistSongs.length} saved tracks</p>
             </button>
 
             <button
