@@ -1709,3 +1709,125 @@ button {
     gap: 10px;
   }
 }
+
+
+/* Functional library controls */
+.song-like-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s ease;
+}
+
+.song-like-btn:hover,
+.song-like-btn.liked {
+  color: #ff5c7a;
+  background: rgba(255, 92, 122, 0.1);
+  border-color: rgba(255, 92, 122, 0.25);
+  transform: scale(1.08);
+}
+
+.playlist-active {
+  color: #fff;
+  background: rgba(124, 92, 255, 0.2);
+  border: 1px solid rgba(124, 92, 255, 0.35);
+}
+
+.audius-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.audius-save-btn {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #333;
+  border-radius: 50%;
+  background: #181818;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.audius-save-btn:hover {
+  transform: scale(1.08);
+  background: #252525;
+}
+
+.audius-actions .audius-play-btn {
+  position: static;
+}
+
+.section-header-reset:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.section-header-reset:disabled:hover {
+  color: #777;
+}
+
+.queue-header {
+  padding-bottom: 4px;
+}
+
+.queue-eyebrow {
+  margin: 0 0 5px;
+  color: #666;
+  font-size: 9px;
+  letter-spacing: 1.8px;
+}
+
+.queue-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-header-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.queue-close {
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+  border-radius: 50% !important;
+  color: #aaa !important;
+}
+
+.queue-close:hover {
+  color: #fff !important;
+}
+
+@media (max-width: 600px) {
+  .song-like-btn,
+  .queue-add-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .song-card {
+    gap: 8px;
+  }
+
+  .song-card-main {
+    gap: 10px;
+  }
+}
