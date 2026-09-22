@@ -134,7 +134,7 @@ function SonicFlowPlayer() {
   const [playlistSongs, setPlaylistSongs] = useState(() =>
     readStoredArray("sonicflow-playlist")
   );
-  const [playlistItems, setPlaylistItems] = useState(() =>
+  const [, setPlaylistItems] = useState(() =>
     readStoredArray("sonicflow-playlist-items")
   );
   const [recentSongs, setRecentSongs] = useState(readRecentIds);
