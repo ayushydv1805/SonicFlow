@@ -7,7 +7,7 @@
     <img src="https://img.shields.io/badge/Live%20Demo-SonicFlow-6366F1?style=for-the-badge" alt="Live Demo" />
   </a>
   <a href="https://github.com/ayushydv1805/SonicFlow/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/ayushydv1805/SonicFlow/ci.yml?style=for-the-badge&label=Build" alt="Build Status" />
+    <img src="https://img.shields.io/github/actions/workflow/status/ayushydv1805/SonicFlow/build.yml?style=for-the-badge&label=Build" alt="Build Status" />
   </a>
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=111827" alt="React 19" />
   <img src="https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite 8" />
