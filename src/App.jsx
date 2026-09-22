@@ -83,6 +83,17 @@ const readRecentIds = () =>
     .map((item) => (typeof item === "object" ? item?.id : item))
     .filter(Boolean);
 
+const createPlaylistSnapshot = (song) => ({
+  id: song.id,
+  title: song.title,
+  artist: song.artist || "Unknown Artist",
+  cover: song.cover || "🎵",
+  url: song.url || "",
+  audiusId: song.audiusId || null,
+  isAudius: Boolean(song.isAudius),
+  isLocal: Boolean(song.isLocal),
+});
+
 function SonicFlowPlayer() {
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
@@ -111,6 +122,9 @@ function SonicFlowPlayer() {
   );
   const [playlistSongs, setPlaylistSongs] = useState(() =>
     readStoredArray("sonicflow-playlist")
+  );
+  const [playlistItems, setPlaylistItems] = useState(() =>
+    readStoredArray("sonicflow-playlist-items")
   );
   const [recentSongs, setRecentSongs] = useState(readRecentIds);
   const [queue, setQueue] = useState([]);
@@ -694,11 +708,26 @@ function SonicFlowPlayer() {
       localStorage.setItem("sonicflow-playlist", JSON.stringify(updated));
       return updated;
     });
+
+    setPlaylistItems((prev) => {
+      const exists = prev.some((item) => item.id === song.id);
+      const updated = exists
+        ? prev.filter((item) => item.id !== song.id)
+        : [...prev, createPlaylistSnapshot(song)];
+
+      localStorage.setItem(
+        "sonicflow-playlist-items",
+        JSON.stringify(updated)
+      );
+      return updated;
+    });
   };
 
   const clearPlaylist = () => {
     setPlaylistSongs([]);
+    setPlaylistItems([]);
     localStorage.setItem("sonicflow-playlist", JSON.stringify([]));
+    localStorage.setItem("sonicflow-playlist-items", JSON.stringify([]));
   };
 
   const handleDeleteLocalSong = async (songId) => {
@@ -722,6 +751,21 @@ function SonicFlowPlayer() {
 
         setCurrentSongIndex(nextIndex);
         return nextSongs.length ? nextSongs : SONGS;
+      });
+
+      setPlaylistSongs((prev) => {
+        const updated = prev.filter((id) => id !== songId);
+        localStorage.setItem("sonicflow-playlist", JSON.stringify(updated));
+        return updated;
+      });
+
+      setPlaylistItems((prev) => {
+        const updated = prev.filter((item) => item.id !== songId);
+        localStorage.setItem(
+          "sonicflow-playlist-items",
+          JSON.stringify(updated)
+        );
+        return updated;
       });
 
       setLocalMusicError("");
@@ -874,6 +918,23 @@ function SonicFlowPlayer() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const savedRemoteTracks = playlistItems.filter(
+      (item) => !item.isLocal && item.url
+    );
+
+    if (!savedRemoteTracks.length) return;
+
+    setSongs((prev) => {
+      const existingIds = new Set(prev.map((song) => song.id));
+      const missingTracks = savedRemoteTracks.filter(
+        (song) => !existingIds.has(song.id)
+      );
+
+      return missingTracks.length ? [...prev, ...missingTracks] : prev;
+    });
+  }, [playlistItems]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -1115,6 +1176,33 @@ function SonicFlowPlayer() {
                     <p>{song.user?.name || "Unknown Artist"}</p>
                   </div>
 
+                  <div className="audius-actions">
+                    <button
+                      type="button"
+                      className="audius-save-btn"
+                      onClick={() =>
+                        togglePlaylist({
+                          id: "audius-" + song.id,
+                          title: song.title || "Untitled Track",
+                          artist: song.user?.name || "Unknown Artist",
+                          cover:
+                            song.artwork?._480x480 ||
+                            song.artwork?._150x150 ||
+                            "",
+                          url:
+                            "https://api.audius.co/v1/tracks/" +
+                            song.id +
+                            "/stream",
+                          audiusId: song.id,
+                          isAudius: true,
+                        })
+                      }
+                      title="Add to My Playlist"
+                      aria-label="Add to My Playlist"
+                    >
+                      {playlistSongs.includes("audius-" + song.id) ? "✓" : "🎼"}
+                    </button>
+
                   <button
                     type="button"
                     className="audius-play-btn"
@@ -1123,6 +1211,7 @@ function SonicFlowPlayer() {
                   >
                     ▶
                   </button>
+                  </div>
                 </article>
               ))}
             </div>
@@ -1233,6 +1322,24 @@ function SonicFlowPlayer() {
                         <strong>{song.title}</strong>
                         <span>{song.artist}</span>
                       </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        likedSongs.includes(song.id)
+                          ? "song-like-btn liked"
+                          : "song-like-btn"
+                      }
+                      onClick={() => toggleLike(song)}
+                      title={likedSongs.includes(song.id) ? "Unlike" : "Like"}
+                      aria-label={
+                        likedSongs.includes(song.id)
+                          ? "Unlike " + song.title
+                          : "Like " + song.title
+                      }
+                    >
+                      {likedSongs.includes(song.id) ? "♥" : "♡"}
                     </button>
 
                     <button
